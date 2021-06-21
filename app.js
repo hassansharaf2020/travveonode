@@ -5,7 +5,10 @@ var cookieParser = require('cookie-parser');
 var logger = require('morgan');
 const port = 3000
 var indexRouter = require('./routes/index');
-var statticDataRouter = require('./routes/api/v1/staticdata');
+var statticRouter = require('./routes/api/v1/static');
+var searchRouter = require('./routes/api/v1/search');
+var update = require('./controllers/juniper/juniperUpdate');
+
 
 var app = express();
 
@@ -20,7 +23,8 @@ app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/', indexRouter);
-app.use('/api/v1/staticdata', statticDataRouter);
+app.use('/api/v1/static', statticRouter);
+app.use('/api/v1/search', searchRouter);
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
@@ -37,6 +41,15 @@ app.use(function(err, req, res, next) {
   res.status(err.status || 500);
   res.render('error');
 });
+
+var cron = require('node-cron');
+// cron.schedule('* * * * *', (req,res) => {
+//   update.updateCity(req,res);
+// });
+
+// cron.schedule('60 24 7 * *', (req,res) => {
+//   update.updateHotelPortfolio(req,res);
+// });
 
 app.listen(port, () => {
   console.log(`Example app listening at http://localhost:${port}`)

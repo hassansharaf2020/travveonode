@@ -28,9 +28,16 @@ exports.juniperRequest = function(body,callback,action,uri='',method='POST'){
 }
 
 exports.handelError =  function(err ,data ,key){
-    // console.log(err);
     var error = [];
     if(typeof data['soap:Envelope'] == 'undefined' ) return ['connection failed'];
+    // console.log(data['soap:Envelope']['soap:Body'][0]['soap:Fault']);
+
+    if(typeof data['soap:Envelope']['soap:Body'][0]['soap:Fault'] != 'undefined') 
+        return data['soap:Envelope']['soap:Body'][0]['soap:Fault'][0];
+
+    if(typeof data['soap:Envelope']['soap:Body'][0][key[0]][0][key[1]][0]['Errors'] != 'undefined') 
+        return data['soap:Envelope']['soap:Body'][0][key[0]][0][key[1]][0]['Errors'][0]['Error'];
+
     if(err.length != 0 || typeof data['soap:Envelope']['soap:Body']+key == 'undefined') 
         error  = err.length != 0 ? [err] : ['connection failed']
     return error;
