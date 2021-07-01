@@ -46,7 +46,7 @@ exports.CityList = function(req,res,callback){
   function CityListCallback (err , data){
     var error = basemodels.handelError(err,data,['CityListResponse','CityListRS','CityList']);
     if(error.length != 0) return callback(error,[]);
-    var hotels =  data['soap:Envelope']['soap:Body'][0]['CityListResponse'][0]['CityListRS'][0]['CityList'];
+    var hotels =  data['soap:Envelope']['soap:Body'][0]['CityListResponse'][0]['CityListRS'][0]['CityList'][0]['City'];
     return callback(err,hotels) ;
   }
   var CityListBody = '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns="http://www.juniper.es/webservice/2007/"><soapenv:Header/><soapenv:Body><CityList><CityListRQ Version="1.1" Language="'+juniper_lang+'"><Login Password="'+juniper_pass+'" Email="'+juniper_user+'"/></CityListRQ></CityList></soapenv:Body></soapenv:Envelope>'

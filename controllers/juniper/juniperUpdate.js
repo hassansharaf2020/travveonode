@@ -2,63 +2,54 @@ var sFunction  =  require('./juniperStaticDataCtr');
 const fs = require('fs');
 var  cityModel = require('../../models/cities');
 var  hotelModel = require('../../models/hotels');
+var basemodels = require('../../models/basemodels');
 
-exports.updateCity = async function(req,res){   
-    citycallback =  async function(cities){
-        //get all countries
-        let countries = await cityModel.getCountries();
-        //loop for all cityes
-        await cities.forEach(async city => {
-            //get country id by check if country exist or not
-            if(countries[city['Country'][0]['Name'][0]] == 'undefined')
-                countryid = await cityModel.addcountry();
-            else countryid = countries[city['Country'][0]['Name'][0]] ;
+exports.updateCity = function(req,res,callback){   
+    var citycallback = async function(cities){
+        var provider = await cityModel.getProvider();
+        // city = cities[0];
+        // if(typeof countries[city['Country'][0]['Name'][0]] == 'undefined')
+        //     var countryid = await cityModel.addcountry(city,provider);
+        // else var countryid = countries[city['Country'][0]['Name'][0]] ;
+        // if(countryid != 'undefined'){
+        //     var cityid = await cityModel.addcity(city,countryid);
+        //     if(cityid != 'undefined')
+        //     cityModel.addRegion(city,cityid);
+        // }
+            
+        for (var city of cities) {
+            if(typeof city['Country'] != 'undefined'){
+                var countryid =  await cityModel.getCountriesByName(city['Country'][0]['Name'][0]);
+                if(! countryid)
+                    var countryid = await cityModel.addcountry(city,provider);
 
-            if(countryid){
-                cityid = await cityModel.addcity(city,countryid);
-
-            if(cityid)
-                await cityModel.addRegion(city,cityid);
+                if(countryid){
+                    var cityid = await cityModel.addcity(city,countryid,provider);
+                    if(cityid != 'undefined')
+                        cityModel.addRegion(city,cityid,provider);
+                }
             }
-        });
+        };
+        callback('done');
     }
     getfiledata(req,res,citycallback);   
 }
 
 exports.updateHotelPortfolio = async function(req,res){
-    var callback = async function(err,data){
-        provderid = await hotelModel.provider();
-        await data.forEach(async hotel => {
+    var callback = async function(data){
+        var provderid = await cityModel.getProvider();
+        for (var hotel of data) {
             await hotelModel.addHotelProtofilo(hotel,provderid);
-        })
+        }
      }
-     sFunction.hotelPortfolio(req,res,callback);
-    //  getfiledataHotlupdate(req,res,callback);
+    //  sFunction.hotelPortfolio(req,res,callback);
+    getfiledataHotlupdate(req,res,callback);
 }
 
 getfiledataHotlupdate = async function(req,res, callback){
-    const path ='hotelprotogilo.json';
+    const path ='hotelprotofolio.json';
     if (fs.existsSync(path)) {
-        fs.readFile(path, 'utf8', async function(err, data) {
-            if (err) throw err;
-            hotels = JSON.parse(data);
-            result = [];cash = [];i=0;
-            hotels['data'].forEach(hotel=>{
-                if(i < 100) result[i] = hotel;
-                else cash[i-100] = hotel;
-                i++;
-            });
-            hotels['data'] = cash;
-
-            if(hotels['data'].length == 0) fs.unlinkSync(path);
-            else{
-                fs.writeFile(path, JSON.stringify(hotels), (err) => {
-                    if (err) throw err;
-                    console.log('The file has been saved!');
-                });
-            }
-            callback(result)
-          });
+        basemodels.readfile(path,callback)
     }else{
         var callback = function(err,data){
             fs.writeFileSync(path, JSON.stringify({err,data}));
@@ -70,26 +61,7 @@ getfiledataHotlupdate = async function(req,res, callback){
 getfiledata = async function(req,res,callback){
     const path ='response.json';
     if (fs.existsSync(path)) {
-        fs.readFile(path, 'utf8', async function(err, data) {
-            if (err) throw err;
-            cities = JSON.parse(data);
-            result = [];cash = [];i=0;
-            cities['data'][0]['City'].forEach(city=>{
-                if(i < 100) result[i] = city;
-                else cash[i-100] = city;
-                i++;
-            });
-            cities['data'][0]['City'] = cash;
-
-            if(cities['data'][0]['City'].length == 0) fs.unlinkSync(path);
-            else{
-                fs.writeFile(path, JSON.stringify(cities), (err) => {
-                    if (err) throw err;
-                    console.log('The file has been saved!');
-                });
-            }
-            callback(result)
-          });
+       basemodels.readfile(path,callback)
     }else{
         var callback = function(err,data){
             fs.writeFileSync(path, JSON.stringify({err,data}));

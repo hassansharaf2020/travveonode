@@ -7,8 +7,8 @@ const port = 3000
 var indexRouter = require('./routes/index');
 var statticRouter = require('./routes/api/v1/static');
 var searchRouter = require('./routes/api/v1/search');
-var update = require('./controllers/juniper/juniperUpdate');
 
+require('./models/cronjobs');
 
 var app = express();
 
@@ -41,15 +41,6 @@ app.use(function(err, req, res, next) {
   res.status(err.status || 500);
   res.render('error');
 });
-
-var cron = require('node-cron');
-// cron.schedule('* * * * *', (req,res) => {
-//   update.updateCity(req,res);
-// });
-
-// cron.schedule('60 24 7 * *', (req,res) => {
-//   update.updateHotelPortfolio(req,res);
-// });
 
 app.listen(port, () => {
   console.log(`Example app listening at http://localhost:${port}`)

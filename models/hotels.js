@@ -2,17 +2,13 @@ var db = require('./db')
 const utf8 = require('utf8');
 const config = require('../config');
 const cityModel = require('./cities');
+const { currentdate } = require('./basemodels');
 
-exports.provider = async function(){
-    provider = await db.asyncexecute("SELECT * FROM `providers` WHERE `code`='juniper'");
-    return provider[0]['id'];
-}
 exports.addHotelProtofilo = async function(hotel,provider_id){
     //check if hotel exists
     let country  = await db.asyncexecute("SELECT * FROM `providers_property_codes` WHERE  `provider_id`="+provider_id+" and `code` = '"+hotel['$']['JPCode']+"'");
     
     if(typeof country[0] == 'undefined'){
-        console.log(hotel);
         if(typeof hotel['City'] == 'undefined') return;
         var city_id = await cityModel.getcityid(hotel['City'][0],provider_id);
         if(!city_id) return;
@@ -26,7 +22,7 @@ exports.addHotelProtofilo = async function(hotel,provider_id){
         else return;
 
         //add property_info_data
-        sql = 'INSERT INTO `property_info_data`(`property_id`, `title`, `address`, `address2`, `postal_code`,  `description`) VALUES ('+propertyEntityId+',"'+hotel['Name'][0]+'","'+hotel['Address'][0]+'","","","")';
+        sql = 'INSERT INTO `property_info_data`(`property_id`, `title`, `address`, `address2`, `postal_code`,  `description`,created_at,updated_at) VALUES ('+propertyEntityId+',"'+hotel['Name'][0]+'","'+hotel['Address'][0]+'","","","","'+currentdate()+'","'+currentdate()+'")';
         let propertyDataEntity  = await db.asyncexecute(sql);
         if(typeof propertyDataEntity != 'undefined') propertyDataEntityId = propertyDataEntity['insertId'];
         else return;
@@ -35,9 +31,9 @@ exports.addHotelProtofilo = async function(hotel,provider_id){
         sql = "SELECT * FROM `providers_property_codes` WHERE `provider_id`="+provider_id+" and `property_id`="+propertyEntityId+" and `code`='"+hotel['$']['JPCode']+"'";
         let property_codes  = await db.asyncexecute(sql);
         if(typeof property_codes[0] != 'undefined'){
-            sql = "INSERT INTO `providers_property_codes` SET `provider_id`="+provider_id+",`property_id`="+propertyEntityId+",`code`='"+hotel['$']['JPCode']+"'";
+            sql = "INSERT INTO `providers_property_codes` SET `provider_id`="+provider_id+",`property_id`="+propertyEntityId+",`code`='"+hotel['$']['JPCode']+"' , 'created_at'='"+currentdate()+"' ,  'updated_at'='"+currentdate()+"'";
             await db.asyncexecute(sql);
         }
-        console.log('done');
-    }
+        return propertyEntityId
+    }else return 0;
 }
