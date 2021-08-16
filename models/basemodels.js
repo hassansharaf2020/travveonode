@@ -7,8 +7,10 @@ const fs = require('fs');
 var db = require('./db')
 
 exports.juniperRequest = function(body,callback,action,uri='',method='POST'){
-    if(uri == '') uri = 'https://xml-uat.bookingengine.es/WebService/jp/operations/staticdatatransactions.asmx';
-    else uri = 'https://xml-uat.bookingengine.es/WebService/jp/operations/'+uri;
+    //var baseurl = 'xml-hu.eetglobal.com';//live
+    var baseurl = 'xml-uat.bookingengine.es';
+    if(uri == '') uri = 'http://'+baseurl+'/WebService/jp/operations/staticdatatransactions.asmx';
+    else uri = 'http://'+baseurl+'/WebService/jp/operations/'+uri;
     request({
                method: method,
                uri: uri,
@@ -17,12 +19,13 @@ exports.juniperRequest = function(body,callback,action,uri='',method='POST'){
                headers: {
                    "User-Agent": "node-request",
                    "Accept-Encoding": "gzip,deflate",
-                   "Host": "xml-uat.bookingengine.es",
+                   "Host": baseurl ,
                    "Content-Type": "text/xml; charset=utf-8",
                    "SOAPAction": '"http://www.juniper.es/webservice/2007/'+action+'"'
                }
            }
            , function (error, response, body) {
+                //fs.writeFile('path.txt',JSON.stringify(response), (err) => {if (err) throw err;});
                if(typeof body == 'undefined') return callback(['connection failed Blocked IP'] , [])
                // body is the decompressed response body
                xml2js.parseString(body, (err, data) => {
@@ -122,12 +125,11 @@ exports.readfile = function(path,readcallback,count=80){
             i++;
         });
         filecontent['data'] = cash;
-
         if(filecontent['data'].length == 0) fs.unlinkSync(path);
         else{
             fs.writeFile(path, JSON.stringify(filecontent), (err) => {
                 if (err) throw err;
-                console.log('The file has been saved!');
+                //console.log('The file has been saved!');
             });
         }
         readcallback(result)

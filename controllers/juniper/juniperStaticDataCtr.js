@@ -2,15 +2,15 @@ const { juniper_user , juniper_pass , juniper_lang } = require('../../config');
 var basemodels = require('../../models/basemodels');
 
 //get HotelPortfolio
-exports.hotelPortfolio = function(req,res,callback){
+exports.hotelPortfolio = function(req,res,token,callback){
   function HotelPortfolioCallback (err , data){
     var error = basemodels.handelError(err,data,['HotelPortfolioResponse','HotelPortfolioRS','HotelPortfolio']);
     if(error.length != 0) return callback(error,[]);
 
-    var hotels = data['soap:Envelope']['soap:Body'][0]['HotelPortfolioResponse'][0]['HotelPortfolioRS'][0]['HotelPortfolio'][0]['Hotel'];
-    return callback(err,hotels) ;
+    var hotels = data['soap:Envelope']['soap:Body'][0]['HotelPortfolioResponse'][0]['HotelPortfolioRS'][0]['HotelPortfolio'][0];
+    return callback(err,hotels);
   }
-  var HotelPortfolioBody = '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns="http://www.juniper.es/webservice/2007/"><soapenv:Header/><soapenv:Body><HotelPortfolio><HotelPortfolioRQ Version="1.1" Language="'+juniper_lang+'" Page="1" RecordsPerPage="500"><Login Password="'+juniper_pass+'" Email="'+juniper_user+'"/></HotelPortfolioRQ></HotelPortfolio></soapenv:Body></soapenv:Envelope>'
+  var HotelPortfolioBody = '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns="http://www.juniper.es/webservice/2007/"><soapenv:Header/><soapenv:Body><HotelPortfolio><HotelPortfolioRQ Version="1.1" Language="'+juniper_lang+'" Token="'+token+'" RecordsPerPage="500"><Login Password="'+juniper_pass+'" Email="'+juniper_user+'"/></HotelPortfolioRQ></HotelPortfolio></soapenv:Body></soapenv:Envelope>'
   basemodels.juniperRequest(HotelPortfolioBody , HotelPortfolioCallback ,'HotelPortfolio')
 }
 
@@ -28,7 +28,7 @@ exports.roomList = function(req,res,callback){
 }
 
 //get HotelContent
-exports.hotelContent = function(req,res,callback){
+exports.hotelContent = function(req,res,allcodes,callback){
   function HotelContentCallback (err , data){
     var error = basemodels.handelError(err,data,['HotelContentResponse','ContentRS','Contents']);
     if(error.length != 0) return callback(error,[]);
@@ -36,7 +36,17 @@ exports.hotelContent = function(req,res,callback){
     var hotels =  data['soap:Envelope']['soap:Body'][0]['HotelContentResponse'][0]['ContentRS'][0]['Contents'][0]['HotelContent'];
     return callback(err,hotels) ;
   }
-  var HotelContentBody = '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns="http://www.juniper.es/webservice/2007/"><soapenv:Header/><soapenv:Body><HotelContent><HotelContentRQ Version="1" Language="'+juniper_lang+'"><Login Password="'+juniper_pass+'" Email="'+juniper_user+'"/><HotelContentList><Hotel Code="'+req.params.code+'"/></HotelContentList></HotelContentRQ></HotelContent></soapenv:Body></soapenv:Envelope>'
+  console.log(typeof allcodes);
+  var codes ='';
+  if(typeof allcodes == 'object'){
+    codes = '<Hotel Code="'+allcodes['code']+'"/>';
+  }else{
+    allcodes.forEach(code => {
+      codes += '<Hotel Code="'+code['code']+'"/>';
+    });
+  }
+  var HotelContentBody = '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns="http://www.juniper.es/webservice/2007/"><soapenv:Header/><soapenv:Body><HotelContent><HotelContentRQ Version="1" Language="'+juniper_lang+'"><Login Password="'+juniper_pass+'" Email="'+juniper_user+'"/><HotelContentList>'+codes+'</HotelContentList></HotelContentRQ></HotelContent></soapenv:Body></soapenv:Envelope>'
+  console.log(HotelContentBody);
   basemodels.juniperRequest(HotelContentBody , HotelContentCallback ,'HotelContent')
 }
 
@@ -73,9 +83,21 @@ exports.zoneList = function(req,res,callback){
   function ZoneListCallback (err , data){
     var error = basemodels.handelError(err,data,['ZoneListResponse','ZoneListRS']);
     if(error.length != 0) return callback(error,[]); 
-    var hotels = data['soap:Envelope']['soap:Body'][0]['ZoneListResponse'][0]['ZoneListRS'][0]['ZoneList'];
+    var hotels = data['soap:Envelope']['soap:Body'][0]['ZoneListResponse'][0]['ZoneListRS'][0]['ZoneList'][0]['Zone'];
     return callback(err,hotels) ;
   }
-  var ZoneListBody = '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns="http://www.juniper.es/webservice/2007/"><soapenv:Header/><soapenv:Body><ZoneList><ZoneListRQ Version="1.1" Language="'+juniper_lang+'"><Login Password="'+juniper_pass+'" Email="'+juniper_user+'"/><ZoneListRequest ProductType="HOT"/></ZoneListRQ></ZoneList></soapenv:Body></soapenv:Envelope>'
+  var ZoneListBody = '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns="http://www.juniper.es/webservice/2007/"><soapenv:Header/><soapenv:Body><ZoneList><ZoneListRQ Version="1.1" Language="'+juniper_lang+'"><Login Password="'+juniper_pass+'" Email="'+juniper_user+'"/><ZoneListRequest ProductType="HOT" MaxLevel="50" /></ZoneListRQ></ZoneList></soapenv:Body></soapenv:Envelope>'
   basemodels.juniperRequest(ZoneListBody , ZoneListCallback ,'ZoneList')
+}
+
+//get hotellist
+exports.hotelList = function(req,res,callback){
+  function HotelListCallback (err , data){
+    var error = basemodels.handelError(err,data,['HotelListResponse','HotelListRS']);
+    if(error.length != 0) return callback(error,[]); 
+    var hotels = data['soap:Envelope']['soap:Body'][0]['HotelListResponse'][0]['HotelListRS'][0]['HotelList'];
+    return callback(err,hotels) ;
+  }
+  var HotelListBody = '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns="http://www.juniper.es/webservice/2007/"><soapenv:Header/><soapenv:Body> <HotelList><HotelListRQ Version="1.1" Language="'+juniper_lang+'"><Login Password="'+juniper_pass+'" Email="'+juniper_user+'"/><HotelListRequest ZoneCode="2" ShowBasicInfo="true"/></HotelListRQ> </HotelList></soapenv:Body></soapenv:Envelope>'
+  basemodels.juniperRequest(HotelListBody , HotelListCallback ,'HotelList')
 }

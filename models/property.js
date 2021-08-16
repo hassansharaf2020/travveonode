@@ -2,16 +2,32 @@ var db = require('./db')
 const config = require('../config');
 const { currentdate } = require('./basemodels');
 const citymodel = require('./cities');
+var striptags = require('striptags');
 
 exports.findPropertyCodeId =  async function(provderid,code){
     var rows = await db.asyncexecute("SELECT * FROM `providers_property_codes` where code='"+code+"' and provider_id="+provderid);
     return rows[0];
 }
 
-exports.findPropertyInfoDataByPI=  async function(property_id){
-    var rows = await db.asyncexecute("SELECT * FROM `property_info_data` where property_id="+property_id);
+exports.getHotelCodesByCityId =  async function(cityid,provderid){
+    var rows = await db.asyncexecute("SELECT ppc.code as hotelcode FROM `providers_property_codes` as ppc JOIN property_info as pi where pi.city_id='"+cityid+"' and ppc.property_id=pi.id and ppc.provider_id="+provderid);
+    return rows;
+}
+
+exports.getHotelCodesByHotelIds =  async function(hotelids,provderid){
+    var rows = await db.asyncexecute("SELECT ppc.code as hotelcode FROM `providers_property_codes` as ppc JOIN property_info as pi where ppc.property_id in ("+hotelids+") and ppc.property_id=pi.id and ppc.provider_id="+provderid);
+    return rows;
+}
+
+exports.findPropertyInfoDataByPI=  async function(property_id,langid){
+    var rows = await db.asyncexecute("SELECT * FROM `property_info_data` where `lang_id`="+langid+" and property_id="+property_id);
     if(typeof rows[0] == 'undefined') return 0;
-    return rows[0]['property_id'];
+    return rows[0];
+}
+
+exports.findPropertyInfoById=  async function(id){
+    var rows = await db.asyncexecute("SELECT * FROM `property_info` where id="+id);
+    return rows[0];
 }
 
 exports.addPropertyInfo =  async function(countrycode,cityname){
@@ -39,12 +55,31 @@ exports.findOrSavePropertyImage = async function(propertyId, href, width, height
 }
 
 
+exports.updatePropertyImage = async function(id, width, height, size){
+    sql  = "UPDATE `property_images` SET  width='"+width+"' ,height='"+height+"' ,size='"+size+"' WHERE id="+id;
+    var rows = await db.asyncexecute(sql);
+}
+
+exports.DeletePropertyImage = async function(id){
+    sql  = "DELETE FROM `property_images` WHERE id="+id;
+    var rows = await db.asyncexecute(sql);
+}
+
+
 exports.findOrSavePropertyDescription = async function(property_id, title, code, para, lang_id){
-    var para = para.replaceAll('"',"'");
-    para = para.replaceAll('.'," ");
+    var para = striptags(para);
+    para = para.replace(/"/g,"'");
+    para = para.replace('.'," ");
+    
     var rows = await db.asyncexecute("SELECT * FROM `property_description` where code='"+code+"' and lang_id='"+lang_id+"' and property_id="+property_id);
     if(typeof rows[0] == 'undefined') {
-        sql  = 'INSERT INTO `property_description` SET `code`='+code+',`property_id`='+property_id+' , title="'+title+'" ,para="'+para+'" ,lang_id='+lang_id+' , `created_at`="'+currentdate()+'" , `updated_at`="'+currentdate()+'"';
+        var sql  = 'INSERT INTO `property_description` SET `code`="'+code+'",`property_id`='+property_id+' , title="'+title+'" ,para="'+para+'" ,lang_id='+lang_id+' , `created_at`="'+currentdate()+'" , `updated_at`="'+currentdate()+'"';
+        if(lang_id != 1){
+            var __sql = "SELECT * FROM property_description WHERE code='"+code+"' and property_id="+property_id+" and `foreign_id` IS NULL and lang_id=1";
+            var foreign_id = await await db.asyncexecute(__sql);
+            if(typeof foreign_id[0] != 'undefined') sql += ' ,foreign_id='+foreign_id[0]['id'];
+        }
+        // console.log(sql);
         var rows = await db.asyncexecute(sql);
         return rows['insertId'];
     }else return rows[0]['id'];
@@ -64,8 +99,10 @@ exports.addPropertyFacts = async function(property_id,type,name,fact_id,fact_nam
 }
 
 
-exports.SavePropertyInfo =  async function(id,country_id,city_id,airports,ratings,lat,lon,category_id,stars,rooms_count,channel_manager){
-    var data = " `city_id`="+city_id+",`country_id`='"+country_id+"' ,`airports`='"+airports+"' ,`ratings`='"+ratings+"' ,`lat`='"+lat+"' ,`lon`='"+lon+"' ,`category_id`='"+category_id+"' ,`stars`='"+stars+"' ,`rooms_count`='"+rooms_count+"' ,`channel_manager`='"+channel_manager+"' , ";
+exports.SavePropertyInfo =  async function(id,country_id,city_id,regionid,lat,lon,stars,rooms_count,channel_manager,phone){
+    var data = " `city_id`="+city_id+",`country_id`='"+country_id+"' , `phone_number`='"+phone+"' ,`lat`='"+lat+"' ,`lon`='"+lon+"' ,`stars`='"+stars+"' ,`rooms_count`='"+rooms_count+"' ,`channel_manager`='"+channel_manager+"' , ";
+    if(regionid) data += " `region_id`='"+regionid+"' , ";
+
     if(!id || typeof id== 'undefined'){
         var sql = "INSERT INTO `property_info` SET " + data +"`created_at`='"+currentdate()+"' , `updated_at`='"+currentdate()+"'";
         var rows = await db.asyncexecute(sql);
@@ -74,18 +111,20 @@ exports.SavePropertyInfo =  async function(id,country_id,city_id,airports,rating
         var sql = "UPDATE `property_info` SET " + data +" `updated_at`='"+currentdate()+"' WHERE id="+id;
         var rows = await db.asyncexecute(sql);
         return id;
-    }
+    } 
 }
 
 
-exports.SavePropertyInfoData =  async function(id,property_id,title,destination,alternativeNames,address,postal_code,street,langid){
-    var data = '`property_id`='+property_id+', `title`="'+title+'",`destination`="'+destination+'" ,`alternativeNames`="'+alternativeNames+'" ,`address`="'+address+'" ,`postal_code`="'+postal_code+'" ,`street`="'+street+'" ,`lang_id`="'+langid+'" , ';
+exports.SavePropertyInfoData =  async function(id,property_id,title,alternativeNames,address,postal_code,street,desc,langid){
+    title = title.replace(/"/g,"'");
+    address = address.replace(/"/g,"'");
+    var data = '`property_id`='+property_id+', `title`="'+title+'" ,`alternativeNames`="'+alternativeNames+'" ,`address`="'+address+'" ,`postal_code`="'+postal_code+'" ,`street`="'+street+'" ,`description`="'+desc+'" ,`lang_id`="'+langid+'" , ';
     if(!id || typeof id== 'undefined'){
         var sql = "INSERT INTO `property_info_data` SET " + data +"`created_at`='"+currentdate()+"' , `updated_at`='"+currentdate()+"'";
         var rows = await db.asyncexecute(sql);
         return rows['insertId'];
     }else{
-        var sql = "UPDATE `property_info_data` SET " + data +" `updated_at`='"+currentdate()+"' WHERE id=".id;
+        var sql = "UPDATE `property_info_data` SET " + data +" `updated_at`='"+currentdate()+"' WHERE id="+id;
         var rows = await db.asyncexecute(sql);
         return id;
     }
@@ -122,8 +161,12 @@ exports.findOrSaveProviders =  async function(providerCode, providerType){
     if(typeof rows[0] == 'undefined') {
         sql  = "INSERT INTO `providers` SET `provider_type_id`="+providerType+",`code`='"+providerCode+"',`active`='0', `created_at`='"+currentdate()+"' , `updated_at`='"+currentdate()+"'";
         var rows = await db.asyncexecute(sql);
-        return rows['insertId'];
-    }else return rows[0]['id'];
+        // return rows['insertId'];
+        return 0;
+    }else{
+        if(rows[0]['active'] == 1) return rows[0]['id'];
+        else return 0;
+    } 
 }
 
 exports.findOrSaveProvidersPropertyCodes =  async function(provider_id, property_id, code){
@@ -169,3 +212,54 @@ exports.findOrSaveProviderPropertyChain =  async function(provider_id, code, cha
         return rows['insertId'];
     }else return rows[0]['id'];
 }
+
+exports.findAirportsBycode =  async function(code){
+    var rows = await db.asyncexecute("SELECT * FROM `airports` where `code`='"+code+"'");
+    if(typeof rows[0] == 'undefined') return 0;
+    else return rows[0]['id'];
+}
+
+exports.findAirportsByName =  async function(name){
+    var rows = await db.asyncexecute('SELECT * FROM `airports_data` where `name`="'+name+'"');
+    if(typeof rows[0] == 'undefined') return 0;
+    else return rows[0]['airports_id'];
+}
+
+exports.findOrSaveAirports=  async function(code,country_id=1){
+    var rows = await db.asyncexecute("SELECT * FROM `airports` where `code`='"+code+"' and country_id="+country_id);
+    if(typeof rows[0] == 'undefined'){
+        sql  = "INSERT INTO `airports` SET `code`='"+code+"' , country_id="+country_id;
+        var rows = await db.asyncexecute(sql);
+        return rows['insertId']
+    }else return rows[0]['id'];
+}
+
+exports.findOrSaveAirportsData=  async function(airportid,name){
+    var rows = await db.asyncexecute('SELECT * FROM `airports_data` where `name`="'+name+'" and `lang_id`='+config.lang_id+' and airports_id='+airportid);
+    if(typeof rows[0] == 'undefined'){
+        sql  = 'INSERT INTO `airports_data` SET `name`="'+name+'" ,`lang_id`='+config.lang_id+', airports_id='+airportid;
+        var rows = await db.asyncexecute(sql);
+        return rows['insertId']
+    }else return rows[0]['id'];
+}
+
+exports.findOrSaveAirportsPropertyIds=  async function(airportid,propertyid){
+    var rows = await db.asyncexecute("SELECT * FROM `property_airports` where `airports_id`="+airportid+" and `property_id`="+propertyid);
+    if(typeof rows[0] == 'undefined'){
+        sql  = "INSERT INTO `property_airports` SET `airports_id`="+airportid+" , `property_id`="+propertyid;
+        var rows = await db.asyncexecute(sql);
+    }
+}
+
+
+exports.findOrSaveProviderAirportCode =  async function(code,airport_id,provider){
+  //check if code and JPDCode exist if not add 
+  var code = await db.asyncexecute("SELECT * FROM `provider_airport_code` WHERE `provider_id`="+provider+" and `airport_id` = "+airport_id+" and `code` ='"+code+"'");
+  if(typeof code[0] == 'undefined' && typeof airport_id != 'undefined' )
+      await db.asyncexecute("INSERT INTO `provider_airport_code` SET `provider_id`="+provider+" , `airport_id` = "+airport_id+" , `code` ='"+code+"'")
+}
+
+exports.findProviderAirportCode =  async function(aircode,provider){
+    var code = await db.asyncexecute("SELECT * FROM `provider_airport_code` WHERE `provider_id`="+provider+" and `code` ='"+aircode+"'");
+    return typeof code[0] != 'undefined' ? code[0]['airport_id'] :  0;
+  }

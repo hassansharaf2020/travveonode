@@ -13,8 +13,10 @@
     "debug": "~2.6.9",
     "express": "~4.16.1",
     "file-get-contents": "^1.0.0",
+    "forever": "^4.0.1",
     "forever-monitor": "^3.0.3",
     "http-errors": "~1.6.3",
+    "image-size": "^1.0.0",
     "jade": "^1.9.2",
     "morgan": "~1.9.1",
     "mysql": "^2.18.1",
@@ -23,7 +25,9 @@
     "node-cron": "^3.0.0",
     "request": "^2.88.2",
     "request-promise": "^4.2.6",
+    "striptags": "^3.2.0",
     "utf8": "^3.0.0",
+    "xlsx": "^0.17.0",
     "xml2js": "^0.4.23"
   },
   "devDependencies": {

@@ -22,7 +22,7 @@ exports.asyncexecute = async function(sql){
         // console.log(con);
     con.query(sql,  async (error, results)=>{
         if(error) {
-            // console.log(sql);
+            console.log(sql);
             if (error['code'] == 'ER_LOCK_DEADLOCK') return [];
             else return reject(error);   
         }

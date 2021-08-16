@@ -4,12 +4,14 @@ const Property = require('../../models/property');
 const cityModel = require('../../models/cities');
 const factsModel = require('../../models/facts');
 const path = require("path");
-const { lang_id } = require('../../config');
+const { lang_id , env } = require('../../config');
+const { count } = require('console');
 
 //get startInfoService
 exports.startInfoService = async function(req,res,callback){
   async function startInfoServiceCallback (items){
     var prividerid = await cityModel.getProvider('giata');
+    if(!prividerid) return;
       for await (var item of items) {
       link = item['$']["xlink:href"];
       // basemodels.giataRequest([] , saveInfoServiceCallback , link);
@@ -31,10 +33,10 @@ var saveInfoService = async function(error,res,prividerid){
     var property_id = await Property.addPropertyInfo(res['result']['item'][0]['country'][0],res['result']['item'][0]['city'][0]);
     await Property.addPropertyCode(prividerid,property_id,giataId);
   }else var property_id = property['property_id']
+  
+  await parseImage(property_id, res['result']['item'][0]['images'])
 
-  // parseImage(property_id, res['result']['item'][0]['images'])
-
-  // ParseText(res['result']['item'][0]['texts'],prividerid);
+  await ParseText(res['result']['item'][0]['texts'],prividerid);
 
   await ParseFactsheet(res['result']['item'][0]['factsheet'],property_id);
 }
@@ -47,44 +49,24 @@ ParseFactsheet = async function(factsheet,property_id){
       if(data['result'] == 'undefined') return;
       var sections = data['result']['item'][0]['factsheet'][0]['sections'][0]['section'];
       for await (let section of sections) {
-        var name = section['$']['name'];
-        var cat_id = await factsModel.getFeatureCatregoryDataBytitle(name);
-        if(! cat_id){
-          var cat_id = await factsModel.addFeaturecatregory();
-          await factsModel.addFeaturecatregoryData(name,cat_id);
-        }
-        var facts = section['facts'][0]['fact'];
-        for await (let fact of facts) {
-          var fact_id = fact['$']['id'];
-          var fact_name = fact['$']['name'];
-          var typeHint = fact['$']['typeHint'];
-          var value = fact['value'][0];
-          
-          await _addFeatureAndFeatureOptionData(cat_id,fact_name,typeHint,value,property_id);
-
-          /* old code
-          var factexists = await Property.getPropertyFactsByFactid(fact_id);
-          if(!factexists){
-            await Property.addPropertyFacts(property_id,type,name,fact_id,fact_name,typeHint,value);
-          }
-          */
-
+        var code = section['$']['name'];
+        var cat_id = await factsModel.addFeaturecatregory(code);
+        if(cat_id){
+          var facts = section['facts'][0]['fact'];
+          for await (let fact of facts) {
+            var fact_name = fact['$']['name'];
+            var typeHint = fact['$']['typeHint'];
+            var value = fact['value'][0];
+            var feature_id = await factsModel.getFeature(cat_id,typeHint,fact_name);
+            if(feature_id) await _addFeatureAndFeatureOptionData(feature_id,value,property_id);
+          };
         };
       };    
     }
 }
 
-var _addFeatureAndFeatureOptionData = async function(cat_id,fact_name,typeHint,fact_value,property_id){
-  //getfeature id 
-  var feature_id = await factsModel.getFeatureDataBytitle(fact_name);
-  if(!feature_id){
-    //add feature and feature data
-    var feature_id  =  await factsModel.addFeature(cat_id,typeHint);
-    await factsModel.addFeatureData(feature_id,fact_name);
-  }
-
+var _addFeatureAndFeatureOptionData = async function(feature_id,fact_value,property_id){
   if(typeof fact_value == 'object'){
-
     var value = fact_value['_'];
     if(fact_value['$']['name'] == 'distance') value += fact_value['$']['unit'];
     var related_feature_id = await factsModel.addFeatureOption(feature_id,property_id);
@@ -127,10 +109,8 @@ ParseText = async function(texts,prividerid){
       var link =  item['$']['xlink:href'];
       var langid = await checkLangId(item['$']['lang']);
       if(langid){
-        var ParsetextCallback = function(res,data){
-          downloadText(data,langid);
-        }
-        basemodels.giataRequest([] , ParsetextCallback , link);
+        var data = await basemodels.giataAwaitRequest([], link);
+        await downloadText(data,langid);
       }
     };
   };
@@ -153,7 +133,9 @@ parseImage = async function(propertyId, images){
 }
 
 downloadimage = function(propertyId,imageid,link){
-  var targetPath = path.join(__dirname, "../../public/uploads/property");
+  if(env == 'live') var targetPath = path.join(__dirname, "../../../public_html/public/uploads/property");
+  else var targetPath = path.join(__dirname, "../../../public_html/public/uploads/property");
+
   if (!fs.existsSync(targetPath)){
     fs.mkdirSync(targetPath);
   }
@@ -168,12 +150,10 @@ downloadimage = function(propertyId,imageid,link){
     basemodels.giatadownloadimageRequest(link,targetPath+'.jpg');
   }
 }
-
-
 getfilestartInfoService = async function(req,res, readcallback){
   const _path ='startInfoService.json';
   if (fs.existsSync(_path)) {
-    basemodels.readfile(_path,readcallback,10);
+    basemodels.readfile(_path,readcallback,2);
   }else{
       var callback = function(err,data){
           var data =  data['result']['items'][0]['item'];
@@ -195,14 +175,13 @@ getfilestartInfoService = async function(req,res, readcallback){
 exports.startMultipeCodesService = async function(req,res,callback){
   async function startMultipeCodesServiceCallback (items){
     var prividerid = await cityModel.getProvider('giata');
+    if(!prividerid) return;
     // console.log(items);
-    var MultipeCodesServiceCallback = function(error,res){
-      if(typeof res['properties'] != 'undefined')
-        parseProperty(res['properties']['property'],prividerid);
-    }
     for (var item of items) {
       link = item['$']["xlink:href"];
-      basemodels.giataRequest([] , MultipeCodesServiceCallback , link);
+      var res = await basemodels.giataAwaitRequest([], link);
+      if(typeof res['properties'] != 'undefined')
+        await parseProperty(res['properties']['property'],prividerid);
     };
     return callback('response') ;
   }
@@ -214,9 +193,11 @@ parseProperty = async function(properties,prividerid){
     var giataId = property['$']['giataId'];
     var propertyCode = await Property.findPropertyCodeId(prividerid,giataId);
     var country_id = await cityModel.getCountriesByCode(property['country'][0]);
-    var city_id = await cityModel.getcityByname(property['city'][0]['_'],country_id);
-    var airports = parseItems(typeof property['airports'] != 'undefined' ? property['airports'][0]['airport'] : []);
-    var ratings = parseItems(typeof property['ratings'] != 'undefined' ? property['ratings'][0]['rating'] : []);
+
+    var destination = properties[0]['destination'][0];
+    var regionid = await cityModel.addRegion(country_id,destination['_'],destination['$']['destinationId'],prividerid);
+    var city_id = await cityModel.getcityByname(property['city'][0]['_'],country_id,regionid);
+
     var latLon = typeof property['geoCodes'] != 'undefined' ? property['geoCodes'][0]['geoCode'][0] : 'undefined';
     if(typeof latLon != 'undefined'){
       var lat = latLon['latitude'][0];
@@ -224,25 +205,32 @@ parseProperty = async function(properties,prividerid){
     }else {
       var lat = 0;var lon = 0;
     }
-    var category_id = property['category'] !='undefined' ? property['category'][0] : 0;
-    var stars = typeof property['ratings'] !='undefined' ? property['ratings'][0]['rating'][0]['$']['value'] : '';
+    // var category_id = typeof property['category'] !='undefined' ? property['category'][0] : 0;
+    var stars = typeof property['ratings'] !='undefined' ? property['ratings'][0]['rating'][0]['$']['value'] : 0;
     var rooms_count = 0;
-    var channel_manager = false;
-
+    var channel_manager = 0;
+// console.log(property);
     // console.log(id,country_id,city_id,airports,ratings,lat,lon,category_id,stars,rooms_count,channel_manager);
  
     if(typeof propertyCode != 'undefined') propertyid= propertyCode['property_id'];
     else propertyid=0;
-    var newpropertyid = await Property.SavePropertyInfo(propertyid,country_id,city_id,airports,ratings,lat,lon,category_id,stars,rooms_count,channel_manager);
+    var phones = typeof property['phones'] !='undefined' ? property['phones'][0]['phone'][0]['_'] : '';
+    var newpropertyid = await Property.SavePropertyInfo(propertyid,country_id,city_id,regionid,lat,lon,stars,rooms_count,channel_manager,phones);
     
-    if(!propertyid) Property.addPropertyCode(prividerid,newpropertyid,giataId);
+    var airports = typeof property['airports'] != 'undefined' ? property['airports'][0]['airport'] : [];
+    for(airport of airports){
+        var code = airport['$']['iata'];
+        var airportid = await Property.findAirportsBycode(code);
+        if(airportid) await Property.findOrSaveAirportsPropertyIds(airportid,newpropertyid);
+    }
 
-    savePropertyData(newpropertyid,property);
-    savePhone(newpropertyid,property);
-    saveEmail(newpropertyid,property);
-    saveWebsite(newpropertyid,property);
-    saveProviderCodes(newpropertyid,property);
-    saveProviderChains(newpropertyid,property,prividerid);
+    if(!propertyid) await Property.addPropertyCode(prividerid,newpropertyid,giataId);
+    await savePropertyData(newpropertyid,property);
+    await savePhone(newpropertyid,property);
+    await saveEmail(newpropertyid,property);
+    await saveWebsite(newpropertyid,property);
+    await saveProviderCodes(newpropertyid,property);
+    await saveProviderChains(newpropertyid,property,prividerid);
   };
 }
 
@@ -258,7 +246,7 @@ var parseAddress = function(property){
   if(typeof property['addresses'] == 'undefined') return [];
   var addresses = property['addresses'][0]['address'][0];
   result['street'] = typeof addresses['street'] != 'undefined' ? addresses['street'][0] : '';
-  result['postal_code'] = typeof addresses['postal_code'] != 'undefined' ? addresses['postal_code'][0] : '';
+  result['postal_code'] = typeof addresses['postalCode'] != 'undefined' ? addresses['postalCode'][0] : '';
   var addressline = '';
   var i=1;
   for (var line of addresses['addressLine']) {
@@ -302,10 +290,12 @@ var saveProviderCodes = async function(propertyid , property){
   for (var codes of propertyCodes) {
     var providerCode = codes['$']['providerCode'];
     var providerid = await Property.findOrSaveProviders(providerCode,providerType);
-    for (var code of codes['code']) {
-      var _code = code['value'][0];
-      if(typeof _code == "string")
-       await Property.findOrSaveProvidersPropertyCodes(providerid,propertyid,_code);
+    if(providerid){
+      for (var code of codes['code']) {
+        var _code = code['value'][0];
+        if(typeof _code == "string")
+        await Property.findOrSaveProvidersPropertyCodes(providerid,propertyid,_code);
+      };
     };
   };
 }
@@ -326,22 +316,21 @@ var saveProviderChains = async function(propertyid , property, prividerid){
 
 
 
-var savePropertyData =  async function(propertyid , property){
-  var propertyInfoDataID =  await Property.findPropertyInfoDataByPI(propertyid);
+var savePropertyData =  async function(_propertyid , property){
+  var propertyInfoDataID =  await Property.findPropertyInfoDataByPI(_propertyid,lang_id)['property_id'];
   var title = property['name'][0] ?? '';
-  var destination = property['destination'][0]['_'] ?? '';
   var alternativeNames = typeof property['alternativeNames'] != 'undefined' ? property['alternativeNames'][0]['alternativeName'][0]['_'] : '';
   var addresses = parseAddress(property);
   var address = addresses['addressline'];
   var postal_code = addresses['postal_code'];
   var street = addresses['street'];
-  Property.SavePropertyInfoData(propertyInfoDataID,propertyid,title,destination,alternativeNames,address,postal_code,street,lang_id);
+  await Property.SavePropertyInfoData(propertyInfoDataID,_propertyid,title,alternativeNames,address,postal_code,street,'',lang_id);
 }
 
 getfilestartMultipeCodesService = async function(req,res, readcallback){
   const _path ='startMultipeCodesService.json';
   if (fs.existsSync(_path)) {
-    basemodels.readfile(_path,readcallback,10);
+    basemodels.readfile(_path,readcallback,2);
   }else{
       var callback = function(err,data){
           var data =  data['properties']['property'];
@@ -349,6 +338,89 @@ getfilestartMultipeCodesService = async function(req,res, readcallback){
        }
        basemodels.giataRequest([] , callback,'http://multicodes.giatamedia.com/webservice/rest/1.latest/properties/');
   }
+}
+
+/* 
+* 
+*
+*  get def
+*
+*/
+
+//get startInfoService
+exports.factSheetDefinitions = async function(req,res,callback){
+  var uri = 'http://ghgml.giatamedia.com/webservice/rest/1.0/factsheetdefinitions/'+langCode();
+  var data = await basemodels.giataAwaitRequest([],uri);
+  var facts = data['result'] != 'undeundefined' ? data['result']['factdefinitions'][0]['sections'][0]['section'] : [];
+  for await (let cat of facts){
+    var cat_code = cat['$']['name'];
+    var cat_title = cat['title'];
+    var options = cat['facts']['0']['fact'];
+
+    var cat_id = await factsModel.addFeaturecatregory(cat_code);
+    await factsModel.addFeaturecatregoryData(cat_title,cat_id);
+
+    for await (let option of options){
+      var option_code = option['$']['name'];
+      var option_title = option['title'];
+      var type_hint = option['$']['typeHint'];
+      // console.log(cat_code,cat_title,option_code,option_title,type_hint);
+      var feature_id  =  await factsModel.addFeature(cat_id,type_hint,option_code);
+      await factsModel.addFeatureData(feature_id,option_title);
+  
+    }
+  }
+  callback('done');
+}
+
+
+//get all airports
+exports.getAllAirports = async function(req,res,callback){
+  var uri = 'https://multicodes.giatamedia.com/webservice/rest/1.0/airports/';
+  var data = await basemodels.giataAwaitRequest([],uri);
+  var airports = data['airports'] != 'undeundefined' ? data['airports']['airport']: [];
+  for await (let airport of airports){
+    var code = airport['$']['iata'];
+    var name = airport['$']['airportName'];
+    var country_code = airport['$']['countryCode'];
+    // console.log(code,name,country_code);
+    var countryid = await cityModel.getCountriesByCode(country_code);
+    var airportid = await Property.findOrSaveAirports(code,countryid);
+    await Property.findOrSaveAirportsData(airportid,name);
+  }
+  callback('done');
+}
+
+//get all Destinations
+exports.getAllDestinations = async function(req,res,callback){
+  var prividerid = await cityModel.getProvider('giata');
+  if(!prividerid) return;
+
+  var uri = 'https://multicodes.giatamedia.com/webservice/rest/1.0/geography';
+  var data = await basemodels.giataAwaitRequest([],uri);
+  var countries = data['geography'] != 'undeundefined' ? data['geography']['countries'][0]['country']: [];
+  for await (let country of countries){
+    var countrycode = country['$']['countryCode'];
+    var country_id = await cityModel.getCountriesByCode(countrycode);
+    for await (let destination of country['destinations'][0]['destination']){
+      var destinationCode = destination['$']['destinationId'];
+      var destinationName = destination['$']['destinationName'];
+      for await (let city of destination['cities'][0]['city']){
+        var cityName = city['$']['cityName'];
+        var regionid = await cityModel.addRegion(country_id,destinationName,destinationCode,prividerid);
+        var city_id = await cityModel.getcityByname(cityName,country_id,regionid);
+      }
+    }
+  }
+  callback('finished');
+}
+
+
+
+langCode =  function(){
+  if(lang_id == 1 ) return 'en';
+  if(lang_id == 2 ) return 'ar';
+  return 'en'
 }
 
 checkLangId = async function(code){

@@ -1,10 +1,10 @@
 var express = require('express');
 var router = express.Router();
-var juniperSearch = require('../../../controllers/juniper/juniperSearchCtr');
+var juniperSearch = require('../../../controllers/search');
 
 /* GET hotelAvail */
 router.post('/hotelavail', function(req, res, next) {
-    var callback = function(err,data){ res.send({err,data}); }
+    var callback = function(err,data){res.send({err,data}); }
     juniperSearch.hotelAvail(req,res,callback)
 });
 
